@@ -12,10 +12,62 @@
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <title>Nhật ký</title>
-    <script type="module" crossorigin src="./assets/index-CDeZE3CL.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-Cpm-BQPB.css">
+    <script type="module" crossorigin src="./assets/index-Dj1tzpDy.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-Cr6wJAnA.css">
   <link rel="manifest" href="./manifest.webmanifest"></head>
   <body>
     <div id="root"></div>
+    <script>
+      // Màn báo lỗi khởi động: nếu sổ không mở được thì hiện lỗi ra thay vì để trang trắng,
+      // chụp màn hình là biết ngay hỏng ở đâu. Sổ mở bình thường thì đoạn này không làm gì.
+      ;(function () {
+        var errs = []
+        function root() {
+          var r = document.getElementById('root')
+          return !r || r.childElementCount === 0
+        }
+        function show(note) {
+          if (!root()) return
+          var box = document.getElementById('boot-err')
+          if (!box) {
+            box = document.createElement('div')
+            box.id = 'boot-err'
+            box.style.cssText =
+              'font:15px/1.5 -apple-system,system-ui,sans-serif;color:#4d4a57;padding:28px 20px;max-width:520px;margin:0 auto'
+            box.innerHTML =
+              '<h2 style="font-size:20px;margin:0 0 6px">Sổ chưa mở được</h2>' +
+              '<p style="margin:0 0 12px">Chụp màn hình này gửi người làm app nhé.</p>' +
+              '<pre id="boot-err-text" style="white-space:pre-wrap;word-break:break-word;background:#fff;border:1px solid #eadfd3;border-radius:8px;padding:10px;font-size:12px;margin:0 0 14px"></pre>' +
+              '<button type="button" onclick="location.reload()" style="font:inherit;padding:9px 18px;border:0;border-radius:8px;background:#e2557f;color:#fff">Tải lại</button>'
+            document.body.appendChild(box)
+          }
+          document.getElementById('boot-err-text').textContent =
+            (note ? note + '\n\n' : '') + errs.slice(-6).join('\n\n') + '\n\n' + navigator.userAgent
+        }
+        window.addEventListener(
+          'error',
+          function (e) {
+            var t = e.target
+            if (t && t !== window && (t.src || t.href)) errs.push('Không tải được: ' + (t.src || t.href))
+            else
+              errs.push(
+                String(e.message) +
+                  (e.filename ? ' @ ' + e.filename.split('/').pop() + ':' + e.lineno + ':' + e.colno : '') +
+                  (e.error && e.error.stack ? '\n' + String(e.error.stack).split('\n').slice(0, 4).join('\n') : ''),
+              )
+            setTimeout(show, 400)
+          },
+          true,
+        )
+        window.addEventListener('unhandledrejection', function (e) {
+          var r = e.reason
+          errs.push('Promise: ' + (r && (r.stack || r.message) ? r.message + '\n' + (r.stack || '') : String(r)))
+          setTimeout(show, 400)
+        })
+        setTimeout(function () {
+          show('Đợi 12 giây vẫn chưa mở được.')
+        }, 12000)
+      })()
+    </script>
   </body>
 </html>
