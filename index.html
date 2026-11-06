@@ -12,20 +12,109 @@
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <title>Nhật ký</title>
-    <script type="module" crossorigin src="./assets/index-Dj1tzpDy.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-Cr6wJAnA.css">
+    <script type="module" crossorigin src="./assets/index-C9OFk_SN.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-Bx557GX5.css">
   <link rel="manifest" href="./manifest.webmanifest"></head>
   <body>
     <div id="root"></div>
     <script>
       // Màn báo lỗi khởi động: nếu sổ không mở được thì hiện lỗi ra thay vì để trang trắng,
       // chụp màn hình là biết ngay hỏng ở đâu. Sổ mở bình thường thì đoạn này không làm gì.
+      // Lỗi do kho dữ liệu (IndexedDB) thì tự đọc thử từng ngăn để chỉ ra chỗ hỏng,
+      // và cho nút làm mới kho (xoá kho trên máy này, có hỏi lại trước).
       ;(function () {
+        var DB = 'nhat-ky'
         var errs = []
+        var probeText = ''
+        var probed = false
+        var entries = null
         function root() {
           var r = document.getElementById('root')
           return !r || r.childElementCount === 0
         }
+        function isDbError() {
+          return /cursor|indexeddb|database|unknownerror|idb|transaction/i.test(errs.join(' '))
+        }
+        function probe(done) {
+          var req
+          try {
+            req = indexedDB.open(DB)
+          } catch (e) {
+            return done('Mở kho lỗi: ' + e.message)
+          }
+          req.onerror = function () {
+            done('Mở kho lỗi: ' + (req.error && req.error.message))
+          }
+          req.onsuccess = function () {
+            var db = req.result
+            var stores = [].slice.call(db.objectStoreNames)
+            var ops = [
+              ['count', function (x) { return x.count() }],
+              ['getAll', function (x) { return x.getAll() }],
+              ['cursor', function (x) { return x.openCursor() }],
+              ['prev', function (x) { return x.openCursor(null, 'prev') }],
+              ['uniq', function (x) { return x.openKeyCursor(null, 'nextunique') }],
+            ]
+            var q = []
+            stores.forEach(function (s) {
+              var idx = []
+              try {
+                idx = [].slice.call(db.transaction(s, 'readonly').objectStore(s).indexNames)
+              } catch (e) {}
+              ;[null].concat(idx).forEach(function (i) {
+                ops.forEach(function (op) {
+                  q.push([s, i, op])
+                })
+              })
+            })
+            var bad = []
+            var k = 0
+            function next() {
+              if (k >= q.length) {
+                var head = 'Kho v' + db.version + ', ' + stores.length + ' ngăn' + (entries != null ? ', ' + entries + ' trang nhật ký' : '')
+                db.close()
+                return done(head + '\n' + (bad.length ? 'Đọc lỗi ở:\n' + bad.join('\n') : 'Đọc thử mọi ngăn: không lỗi'))
+              }
+              var s = q[k][0], i = q[k][1], op = q[k][2]
+              k++
+              var name = s + (i ? '.' + i : '') + ' ' + op[0]
+              try {
+                var tx = db.transaction(s, 'readonly')
+                var r = op[1](i ? tx.objectStore(s).index(i) : tx.objectStore(s))
+                r.onsuccess = function () {
+                  if (s === 'entries' && !i && op[0] === 'count') entries = r.result
+                  next()
+                }
+                r.onerror = function (ev) {
+                  bad.push(name + ': ' + (r.error && r.error.message))
+                  ev.preventDefault()
+                  next()
+                }
+              } catch (e) {
+                bad.push(name + ': ' + e.message)
+                next()
+              }
+            }
+            next()
+          }
+        }
+        function reset() {
+          var msg =
+            'Làm mới kho sẽ XOÁ HẾT dữ liệu sổ trên máy này' +
+            (entries ? ' (đang có ' + entries + ' trang)' : '') +
+            '. Chỉ làm khi máy này chưa ghi gì quan trọng, hoặc cậu đã có file sao lưu.\n\nXoá rồi mở lại?'
+          if (!confirm(msg)) return
+          var go = function () {
+            location.reload()
+          }
+          var d = indexedDB.deleteDatabase(DB)
+          d.onsuccess = go
+          d.onerror = go
+          d.onblocked = function () {
+            setTimeout(go, 1500)
+          }
+        }
+        window.__resetBook = reset
         function show(note) {
           if (!root()) return
           var box = document.getElementById('boot-err')
@@ -38,11 +127,22 @@
               '<h2 style="font-size:20px;margin:0 0 6px">Sổ chưa mở được</h2>' +
               '<p style="margin:0 0 12px">Chụp màn hình này gửi người làm app nhé.</p>' +
               '<pre id="boot-err-text" style="white-space:pre-wrap;word-break:break-word;background:#fff;border:1px solid #eadfd3;border-radius:8px;padding:10px;font-size:12px;margin:0 0 14px"></pre>' +
-              '<button type="button" onclick="location.reload()" style="font:inherit;padding:9px 18px;border:0;border-radius:8px;background:#e2557f;color:#fff">Tải lại</button>'
+              '<button type="button" onclick="location.reload()" style="font:inherit;padding:9px 18px;border:0;border-radius:8px;background:#e2557f;color:#fff">Tải lại</button> ' +
+              '<button type="button" id="boot-reset" onclick="__resetBook()" style="display:none;font:inherit;padding:8px 14px;margin-left:6px;border:1.5px solid #e2557f;border-radius:8px;background:#fff;color:#c03f68">Làm mới kho dữ liệu</button>'
             document.body.appendChild(box)
           }
           document.getElementById('boot-err-text').textContent =
-            (note ? note + '\n\n' : '') + errs.slice(-6).join('\n\n') + '\n\n' + navigator.userAgent
+            (note ? note + '\n\n' : '') + errs.slice(-6).join('\n\n') + (probeText ? '\n\n' + probeText : '') + '\n\n' + navigator.userAgent
+          if (isDbError()) {
+            document.getElementById('boot-reset').style.display = 'inline-block'
+            if (!probed) {
+              probed = true
+              probe(function (t) {
+                probeText = t
+                show(note)
+              })
+            }
+          }
         }
         window.addEventListener(
           'error',
